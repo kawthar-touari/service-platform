@@ -139,7 +139,7 @@ export const toggleServiceStatus = async (req, res) => {
 export const getAllServices = async (_req, res) => {
   try {
     const services = await Service.find({ isActive: true })
-      .select('-createdByEmail -createdByPhone fullName')
+      .select('-createdByEmail-createdByPhone')
       .sort({ createdAt: -1 });
     res.status(200).json(services);
   } catch (error) {
