@@ -2,24 +2,6 @@ import Booking from '../models/Booking.js';
 import Service from '../models/Service.js';
 
 
-export const getTotalBookings = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // Récupérer les services créés par ce user (worker)
-    const services = await Service.find({ createdBy: userId }).select('_id');
-    const serviceIds = services.map(service => service._id);
-
-    // Compter les bookings associés à ces services
-    const total = await Booking.countDocuments({ service: { $in: serviceIds } });
-
-    res.status(200).json({ totalBookings: total });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to calculate the number of reservations', error: err.message });
-  }
-};
-
-
 export const getAverageRating = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -202,7 +184,7 @@ export const getWorkerBookings = async (req, res) => {
     const userId = req.user.id;
 
     // Récupérer les services créés par cet utilisateur
-    const services = await Service.find({ createdBy: userId }, { _id: 1 });
+    const services = await Service.find({ createdBy: UserId }, { _id: 1 });
     const serviceIds = services.map(service => service._id);
 
     // Trouver les réservations liées à ces services
@@ -238,21 +220,6 @@ export const getWorkerReviews = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch reviews', error: err.message });
   }
 };
-
-
-export const getWorkerServices = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const services = await Service.find({ createdBy: userId });
-
-    res.status(200).json(services);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch services', error: err.message });
-  }
-};
-
-
 
 export const getWorkerDashboardStats = async (req, res) => {
   try {
@@ -350,7 +317,7 @@ export const getWorkerBookingsByStatus = async (req, res) => {
     const bookings = await Booking.find({
       service: { $in: serviceIds },
       status: status
-    }).populate('user', 'fullName email');
+    });
 
     res.status(200).json(bookings);
 
@@ -425,5 +392,98 @@ export const getIncomingBookings = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ message: "Failed to get incoming bookings", error: error.message });
+  }
+};
+
+
+export const getWorkerReviewsbyId = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Récupérer les services créés par cet utilisateur
+    const services = await Service.find({ createdBy: userId }, { _id: 1 });
+    const serviceIds = services.map(service => service._id);
+
+    // Récupérer les réservations associées avec des avis
+    const reviews = await Booking.find({
+      service: { $in: serviceIds },
+      review: { $exists: true },
+    })
+    .populate('user', 'fullName')
+    .populate('service', 'fullName');
+    if (reviews.length === 0) {
+      return res.status(404).json({ message: 'No reviews found for this worker' });
+    }
+
+    res.status(200).json(reviews);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch reviews', error: err.message });
+  }
+};
+
+export const getWorkerStats2 = async (req, res) => {
+  try {
+    const workerId = req.user.id; // تأكد أن الأدمن أو العامل هو من يطلب
+
+    // جلب جميع حجوزات العامل عبر الخدمات التي يملكها
+    const bookings = await Booking.aggregate([
+      {
+        $lookup: {
+          from: 'services',
+          localField: 'service',
+          foreignField: '_id',
+          as: 'serviceData',
+        },
+      },
+      { $unwind: '$serviceData' },
+      {
+        $match: {
+          'serviceData.User': new mongoose.Types.ObjectId(workerId),
+        },
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalRating: {
+            $sum: {
+              $cond: [{ $ifNull: ['$rating', false] }, '$rating', 0],
+            },
+          },
+          ratedCount: {
+            $sum: {
+              $cond: [{ $ifNull: ['$rating', false] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    let stats = {
+      averageRating: 0,
+      pendingBookings: 0,
+      confirmedBookings: 0,
+      completedBookings: 0,
+    };
+
+    // استخراج القيم من الـ group
+    for (const entry of bookings) {
+      if (entry._id === 'pending') stats.pendingBookings = entry.count;
+      if (entry._id === 'confirmed') stats.confirmedBookings = entry.count;
+      if (entry._id === 'completed') {
+        stats.completedBookings = entry.count;
+        stats.averageRating =
+          entry.ratedCount > 0
+            ? (entry.totalRating / entry.ratedCount).toFixed(2)
+            : 0;
+      }
+    }
+
+    res.status(200).json(stats);
+  } catch (error) {
+    res.status(500).json({
+      message: 'حدث خطأ أثناء جلب إحصائيات العامل',
+      error: error.message,
+    });
   }
 };

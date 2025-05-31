@@ -8,8 +8,10 @@ import http from "http";
 import jwt from 'jsonwebtoken';
 import {Server} from "socket.io";
 import { protect } from './middleware/authMiddleware.js';
-import workerDashboardRoutes from './routes/userDashboard.js';
-
+import userDashboardRoutes from './routes/userDashboard.js';
+import postRoutes from './routes/postRoutes.js';
+import messageRoutes from  './routes/messageRoutes.js';
+import { createAdminUser } from './createAdmin.js';
 
 const app = express();
 
@@ -19,13 +21,15 @@ app.use(cors()); // ✅ تمكين CORS
 
 // السماح بقراءة بيانات JSON من الطلبات
 app.use(express.json());
-
+ 
 app.use('/api/users', userRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/bookings", bookingRoutes);
-app.use("/api/auth", userRoutes);
 app.use("/api/worker", bookingRoutes);
-app.use("/api/worker-dashboard", workerDashboardRoutes);
+app.use("/api/worker-dashboard", userDashboardRoutes);
+app.use("/api/posts", postRoutes);
+app.use("/api/messages", messageRoutes);
+
 // تحميل المتغيرات البيئية
 dotenv.config();
 
@@ -34,9 +38,11 @@ mongoose.connect(process.env.BD_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   serverSelectionTimeoutMS: 500000
-}).then(() => console.log("✅kawthar MongoDB Connected"))
+}).then(() => {  createAdminUser(); 
+  console.log("✅kawthar MongoDB Connected");
+})
 .catch(error => console.error("❌ Database Connection Error:", error));
-
+// إنشاء مستخدم أدمن تلقائيًا عند تشغيل السيرفر
 
 
 app.get("/api/test", (req, res) => {

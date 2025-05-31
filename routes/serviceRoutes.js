@@ -18,7 +18,7 @@ router.post('/',protect, addService);
 
 router.put('/:id', protect,canModifyService, updateService);
 
-router.delete('/:id', protect,canModifyService, deleteService);
+router.delete('/:id', protect, deleteService);
 
 router.get('/my-services', protect, getWorkerServices);
 
@@ -26,8 +26,9 @@ router.patch('/toggle-status/:id', protect, toggleServiceStatus);
 
 router.get('/', getAllServices);
 
-router.get('/:id', getServiceById);
+router.get('/services/:userId', getServiceById);
+
 
 router.get('/informationofwhocreattheservice/:id',protect,getUserFromService )
 
-export default router;
+export default router  ;

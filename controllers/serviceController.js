@@ -1,4 +1,5 @@
 import Service from '../models/Service.js';
+import mongoose from 'mongoose';
 
 export const addService = async (req, res) => {
   try {
@@ -138,7 +139,7 @@ export const toggleServiceStatus = async (req, res) => {
 export const getAllServices = async (_req, res) => {
   try {
     const services = await Service.find({ isActive: true })
-      .select('-createdByEmail -createdByPhone')
+      .select('-createdByEmail -createdByPhone fullName')
       .sort({ createdAt: -1 });
     res.status(200).json(services);
   } catch (error) {
@@ -146,18 +147,16 @@ export const getAllServices = async (_req, res) => {
   }
 };
 
-
 export const getServiceById = async (req, res) => {
-   try {
-    const userId = req.params.userId; // تأكد أن الراوتر يحتوي على :userId
-    const services = await Service.find({ User: userId, isActive: true });
+  try {
+    const userId = req.params.userId;
+const services = await Service.find({ createdBy :userId });
 
     res.status(200).json(services);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch user services', error: error.message });
   }
 };
-
 
 export const getUserFromService = async (req, res) => {
   try {

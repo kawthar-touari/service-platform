@@ -1,42 +1,42 @@
 import express from 'express';
 import { 
-  getTotalBookings,
   getAverageRating,
   getMostDemandedService,
   getRecentReviews,
   getMonthlyBookingsStats,
   getWorkerStats,
+  getWorkerBookingCountsByMonth,
   getWorkerBookings,
   getWorkerReviews,
-  getWorkerBookingCountsByMonth,
   filterWorkerReviewsByRating,
   getIncomingBookings,
   getWorkerBookingsByStatus,
   getWorkerDashboardStats,
-  getWorkerServices,
-} from '../controllers/useDashboardController.js';
+  getWorkerReviewsbyId,
+  getWorkerStats2
 
-import { getMyProfile } from  '../controllers/userController.js';
+} from '../controllers/userDashboardController.js';
+
+import { getMyProfile } from  '../controllers/useController.js';
 
 import {  protect } from '../middleware/authMiddleware.js';
 
 
 const router = express.Router();
 
-router.get('/total-bookings', protect , getTotalBookings);
-router.get('/average-rating', protect, getAverageRating);
-router.get('/most-demanded-service', protect, getMostDemandedService);
-router.get('/recent-reviews', protect, getRecentReviews);
-router.get('/monthly-bookings', protect, getMonthlyBookingsStats);
-router.get('/stats', protect, getWorkerStats);
+router.get('/average-rating', protect, getAverageRating);//done
+router.get('/most-demanded-service', protect, getMostDemandedService);//done
+router.get('/recent-reviews', protect, getRecentReviews);//done
+router.get('/monthly-bookings', protect, getMonthlyBookingsStats);//done
+router.get('/stats', protect, getWorkerStats);//done
 router.get('/bookings', protect, getWorkerBookings);
 router.get('/reviews', protect, getWorkerReviews);
-router.get('/earnings', protect, getWorkerBookingCountsByMonth);
-router.get('/dashboard/reviews', protect, filterWorkerReviewsByRating);
-router.get('/incoming-bookings', protect, getIncomingBookings);
-router.get('/bookings-by-status', protect, getWorkerBookingsByStatus);
-router.get('/dashboard/stats', protect, getWorkerDashboardStats);
-router.get('/me', protect, getMyProfile); // delete this 
-router.get('/incoming_services', protect, getWorkerServices);                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-
+router.get('/dashboard/reviews', protect, filterWorkerReviewsByRating);//done
+router.get('/incoming-bookings', protect, getIncomingBookings);//idk try it again
+router.get('/bookings-by-status/:status', protect, getWorkerBookingsByStatus);//done
+router.get('/dashboard/stats', protect, getWorkerDashboardStats);//done
+router.get('/me', protect, getMyProfile); // delete this                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+router.get('/bookings/monthly-counts', protect, getWorkerBookingCountsByMonth); //mklah double
+router.get('/reviews/:id', protect, getWorkerReviewsbyId);
+router.get('/stats2', protect, getWorkerStats2); //new endpoint for worker stats
 export default router;

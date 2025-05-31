@@ -2,7 +2,7 @@ import Booking from '../models/Booking.js';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import sendEmail from '../utils/emailService.js';
-
+import Service from '../models/Service.js';
 
 // إنشاء توكن JWT
 const generateToken = (id) => {
@@ -99,8 +99,6 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
-
 // تسجيل الدخول
 export const loginUser = async (req, res) => {
     try {
@@ -175,23 +173,39 @@ export const getMyProfile = async (req, res) => {
 // تحديث بيانات المستخدم
 export const updateUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    // التأكد من أن المستخدم موجود
+    const user = await User.findById(req.user._id);
     if (!user) {
-      return res.status(404).json({ message: '❌ User not found.' });
+      return res.status(404).json({ message: '❌ المستخدم غير موجود.' });
     }
 
-  // تحديث البيانات فقط إذا تم إرسالها
-    user.fullName = req.body.fullName || user.fullName;
-    user.email = req.body.email || user.email;
-    user.phone = req.body.phone || user.phone;
-    user.nationalId = req.body.nationalId || user.nationalId;
+    // تحديث الحقول فقط إذا تم إرسالها
+    const { fullName, email, phone } = req.body;
+
+    if (fullName !== undefined) user.fullName = fullName;
+    if (email !== undefined) user.email = email;
+    if (phone !== undefined) user.phone = phone;
 
     const updatedUser = await user.save();
-    res.json({ message: '✅ User updated successfully.', user: updatedUser });
+
+    res.status(200).json({
+      message: '✅ تم تحديث بيانات المستخدم بنجاح.',
+      user: {
+        _id: updatedUser._id,
+        fullName: updatedUser.fullName,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: '❌ An error occurred while updating the user.', error: error.message });
+    res.status(500).json({
+      message: '❌ حدث خطأ أثناء تحديث المستخدم.',
+      error: error.message,
+    });
   }
 };
+
 
 
 // حذف مستخدم
@@ -207,7 +221,6 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ message: '❌ An error occurred while deleting the user.', error: error.message });
   }
 };
-
 
 
 // جلب الحجوزات الخاصة بالعامل مع فلترة الحالة
@@ -312,7 +325,7 @@ export const updatePaymentInfo = async (req, res) => {
 //نحوس على العامل حسب المهارى او المنطقة
 export const searchWorkersByLocation = async (req, res) => {
   try {
-    const { skill, lng, lat, radius = 10 } = req.query; // radius بالكيلومتر
+    const { skill, lng, lat, radius = 10 } = req.body; // radius بالكيلومتر
 
     let filter = { status: 'available' };
 

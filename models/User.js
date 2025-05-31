@@ -1,9 +1,12 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { type } from 'os';
 
 const userSchema = new mongoose.Schema({
     fullName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
+    resetPasswordToken: {type: String},
+    resetPasswordExpires : {type : Date},
     password: { type: String, required: true },
     isVerified: { type: Boolean, default: false }, // حالة التحقق من البريد الإلكتروني
     otp: { type: String }, 

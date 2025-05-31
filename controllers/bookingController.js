@@ -1,14 +1,17 @@
 import Booking from '../models/Booking.js';
 import jwt from 'jsonwebtoken';
 import Service from '../models/Service.js';
+import { sendEmail } from '../utils/emailService.js';
 // إنشاء حجز جديد
 export const createBooking = async (req, res) => {
   try {
     const customerId = req.user.id;
     const { service: serviceId, bookingDate, location } = req.body;
 
-    const service = await Service.findOne({ _id: serviceId, isActive: true });
-    if (!service) {
+    console.log("serviceId received:", serviceId);
+
+    const service = await Service.findById(serviceId);
+    if (!service || service.isActive === false) {
       return res.status(404).json({ message: 'Service not available or unavailable' });
     }
 
@@ -20,12 +23,13 @@ export const createBooking = async (req, res) => {
       customer: customerId,
       service: serviceId,
       bookingDate,
-      location
+      location,
     });
 
     const savedBooking = await newBooking.save();
     res.status(201).json(savedBooking);
   } catch (err) {
+    console.error("Booking error:", err);
     res.status(500).json({ message: 'Failed to create reservation', error: err.message });
   }
 };
@@ -113,7 +117,7 @@ export const addReview = async (req, res) => {
     }
 
     // لا يمكن التقييم إلا بعد إتمام الخدمة
-    if (booking.status !== 'done') {
+    if (booking.status !== 'completed') {
       return res.status(400).json({ message: 'لا يمكن إضافة تقييم قبل إتمام الخدمة' });
     }
 
@@ -136,7 +140,6 @@ export const addReview = async (req, res) => {
     res.status(500).json({ message: 'فشل في إضافة التقييم', error: err.message });
   }
 };
-
 // تحديث تقييم
 export const updateReview = async (req, res) => {
   try {
@@ -155,7 +158,7 @@ export const updateReview = async (req, res) => {
     }
 
     // تحقق أن الحجز مكتمل
-    if (booking.status !== 'done') {
+    if (booking.status !== 'completed') {
       return res.status(400).json({ message: 'لا يمكن تعديل التقييم قبل إتمام الخدمة' });
     }
 
@@ -180,22 +183,27 @@ export const updateReview = async (req, res) => {
 };
 
 // حذف تقييم
- export const deleteReview = async (req, res) => {
+export const deleteReview = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const booking = await Booking.findById(bookingId);
+    console.log('ID الحجز:', bookingId);
 
-    if (!booking || !booking.review) {
+    const booking = await Booking.findById(bookingId);
+    console.log('محتوى التقييم:', booking?.review);
+
+    if (!booking) {
+      return res.status(404).json({ message: 'الحجز غير موجود' });
+    }
+
+    if (!booking.review) {
       return res.status(404).json({ message: 'لا يوجد تقييم لحذفه' });
     }
 
-    // تأكد أن المستخدم هو صاحب الحجز
     if (booking.customer.toString() !== req.user.id) {
       return res.status(403).json({ message: 'غير مصرح لك بحذف هذا التقييم' });
     }
 
-    // تأكد أن الحجز مكتمل
-    if (booking.status !== 'done') {
+    if (booking.status !== 'completed') {
       return res.status(400).json({ message: 'لا يمكن حذف التقييم قبل إتمام الخدمة' });
     }
 
@@ -205,6 +213,7 @@ export const updateReview = async (req, res) => {
 
     res.status(200).json({ message: 'تم حذف التقييم بنجاح' });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'حدث خطأ أثناء حذف التقييم', error: error.message });
   }
 };
@@ -251,40 +260,45 @@ export const deleteBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
 
-    // التحقق من وجود توكن المصادقة
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "رمز المصادقة مفقود أو غير صالح" });
+    // التحقق من صلاحية الـ ObjectId
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ message: "❌ معرف الحجز غير صالح" });
     }
 
-    // استخراج والتحقق من التوكن
+    // التحقق من وجود التوكن
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "❌ رمز المصادقة مفقود أو غير صالح" });
+    }
+
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const { id: userId, role: userRole } = decoded;
 
-    // البحث عن الحجز
+    // جلب الحجز
     const booking = await Booking.findById(bookingId);
     if (!booking) {
-      return res.status(404).json({ message: "الحجز غير موجود" });
+      return res.status(404).json({ message: "❌ الحجز غير موجود" });
     }
 
-    // التحقق من حالة الحجز (يجب أن يكون قيد الانتظار فقط للحذف)
+    // لا يمكن حذف الحجز إلا إذا كان قيد الانتظار
     if (booking.status !== "pending") {
-      return res.status(403).json({ message: "لا يمكن حذف الحجز بعد بدء المعالجة" });
+      return res.status(403).json({ message: "❌ لا يمكن حذف الحجز بعد بدء المعالجة" });
     }
 
-    // التحقق من صلاحية المستخدم (مالك الحجز أو مسؤول)
+    // السماح بالحذف فقط لصاحب الحجز أو الأدمن
     if (booking.customer.toString() !== userId && userRole !== "admin") {
-      return res.status(403).json({ message: "ليس لديك صلاحية حذف هذا الحجز" });
+      return res.status(403).json({ message: "❌ ليس لديك صلاحية حذف هذا الحجز" });
     }
 
     // حذف الحجز
     await booking.deleteOne();
 
-    res.status(200).json({ message: "تم حذف الحجز بنجاح" });
+    res.status(200).json({ message: "✅ تم حذف الحجز بنجاح" });
 
   } catch (error) {
-    res.status(500).json({ message: "حدث خطأ أثناء حذف الحجز", error: error.message });
+    console.error("خطأ في حذف الحجز:", error);
+    res.status(500).json({ message: "❌ حدث خطأ أثناء حذف الحجز", error: error.message });
   }
 };
 
@@ -292,20 +306,26 @@ export const deleteBooking = async (req, res) => {
 
 export const getBookingsOfWorker = async (req, res) => {
   try {
-    const { workerId } = req.params;
+    const workerId = req.user.id;
 
-    const bookings = await Booking.find()
+    // 1. اجلب جميع الخدمات التي يملكها العامل
+    const services = await Service.find({ User: workerId }).select('_id');
+
+    const serviceIds = services.map(s => s._id);
+
+    // 2. اجلب الحجوزات التي تتبع هذه الخدمات
+    const bookings = await Booking.find({ service: { $in: serviceIds } })
       .populate({
         path: 'service',
-        match: { User: workerId },
         select: 'title startingPrice'
       })
-      .populate('customer', 'name email')
+      .populate({
+        path: 'customer',
+        select: 'fullName phone'
+      })
       .sort({ bookingDate: -1 });
 
-    const filteredBookings = bookings.filter(b => b.service !== null);
-
-    res.status(200).json(filteredBookings);
+    res.status(200).json(bookings);
   } catch (err) {
     res.status(500).json({ message: 'فشل في جلب الحجوزات للعامل', error: err.message });
   }
@@ -313,24 +333,30 @@ export const getBookingsOfWorker = async (req, res) => {
 
 export const getBookingsOfWorkerAndStatus = async (req, res) => {
   try {
-    const { workerId, status } = req.params;
+    const workerId = req.user.id; // استخراج ID العامل من التوكن
+    const { status } = req.params;
 
     const bookings = await Booking.find({ status })
       .populate({
         path: 'service',
-        match: { User: workerId },
-        select: 'title startingPrice'
+        select: 'title startingPrice createdBy ' // نحتاج createdBy
       })
-      .populate('customer', 'name email');
+      .populate({
+        path: 'customer',
+        select: 'name email'
+      })
+      .sort({ bookingDate: -1 });
 
-    const filteredBookings = bookings.filter(b => b.service !== null);
+    // فلترة الحجوزات التي يكون العامل صاحب الخدمة فيها هو نفس المستخدم
+    const filteredBookings = bookings.filter(
+      b => b.service !== null && b.service.createdBy?.toString() === workerId
+    );
 
     res.status(200).json(filteredBookings);
   } catch (err) {
     res.status(500).json({ message: 'فشل في جلب الحجوزات حسب الحالة', error: err.message });
   }
 };
-
 // 2. جلب إحصائيات عدد الحجوزات حسب الحالة للعامل
 export const getStatsOfWorker = async (req, res) => {
   try {
@@ -367,14 +393,14 @@ export const getReviewsOfWorker = async (req, res) => {
         match: { User: workerId },
         select: '_id'
       })
-      .populate('customer', 'name');
+      .populate('customer', 'fullName');
 
     const filtered = bookings.filter(b => b.service !== null);
 
     const reviews = filtered.map(b => ({
       rating: b.rating,
       review: b.review,
-      customer: b.customer?.name || 'زبون'
+      customer: b.customer?.fullName || 'زبون'
     }));
 
     res.status(200).json(reviews);
@@ -384,46 +410,6 @@ export const getReviewsOfWorker = async (req, res) => {
 };
 
 
-// رد العامل على الحجز: قبول أو رفض الحجز (تغيير الحالة)
-
-export const respondToBooking = async (req, res) => {
-  try {
-    const userId = req.user.id; // هوية المستخدم من التوكن
-    const bookingId = req.params.id;
-    const { action } = req.body; // 'accept' أو 'reject'
-
-    // جلب الحجز مع بيانات الخدمة (للوصول لصاحب الخدمة)
-    const booking = await Booking.findById(bookingId).populate('service');
-
-    if (!booking) 
-      return res.status(404).json({ message: "الحجز غير موجود" });
-
-    // تحقق أن الشخص الذي يرد هو صاحب الخدمة (المستخدم المرتبط بحقل User في الـ service)
-    if (!booking.service || booking.service.User.toString() !== userId) {
-      return res.status(403).json({ message: "ليست لديك صلاحية الرد على هذا الحجز" });
-    }
-
-    if (booking.status !== "pending") {
-      return res.status(400).json({ message: "تم معالجة هذا الحجز بالفعل" });
-    }
-
-    if (action === "accept") {
-      booking.status = "accepted";
-    } else if (action === "reject") {
-      booking.status = "rejected";
-    } else {
-      return res.status(400).json({ message: "الإجراء غير صالح" });
-    }
-
-    await booking.save();
-
-    res.status(200).json({ message: `تم ${booking.status === 'accepted' ? 'قبول' : 'رفض'} الحجز` });
-
-  } catch (error) {
-    res.status(500).json({ message: "فشل في الرد على الحجز", error: error.message });
-  }
-};
- 
 //تاكيد الحجز من الايمايل (مسييتهاش )
 
 
@@ -531,56 +517,31 @@ export const getBookingsByUser = async (req, res) => {
   }
 };
 
- export const filterWorkerReviewsByRating = async (req, res) => {
-  const workerId = req.user.id;
-  const ratingFilter = parseInt(req.query.rating);
-
-  try {
-    // جلب خدمات العامل
-    const services = await Service.find({ User: workerId }).select('_id');
-    const serviceIds = services.map(s => s._id);
-
-    // جلب الحجوزات التي تخص خدمات العامل وتحمل تقييم مطابق للفلتر
-    const bookingsWithRating = await Booking.find({
-      service: { $in: serviceIds },
-      rating: ratingFilter,
-      review: { $exists: true, $ne: null }, // فقط التي تحتوي على تقييم وتعليق
-    }).select('review rating');
-
-    // استخراج المراجعات فقط
-    const filteredReviews = bookingsWithRating.map(b => ({
-      rating: b.rating,
-      review: b.review
-    }));
-
-    res.status(200).json(filteredReviews);
-  } catch (error) {
-    res.status(500).json({ message: 'خطأ أثناء جلب التقييمات', error: error.message });
-  }
-};
-
+import mongoose from 'mongoose';
 
 export const getWorkerBookingCountsByMonth = async (req, res) => {
   const workerId = req.user.id;
 
   try {
     const bookings = await Booking.aggregate([
-      // أولاً نجلب الحجوزات ونعمل lookup لجلب بيانات الخدمة
       {
         $lookup: {
-          from: 'services', // اسم مجموعة الخدمات في MongoDB (جمع الحروف صغير)
+          from: 'services',
           localField: 'service',
           foreignField: '_id',
           as: 'serviceData',
         },
       },
-      // تفكيك المصفوفة الناتجة من الlookup (لأنه مفترض تكون عنصر واحد)
       { $unwind: '$serviceData' },
 
-      // فلترة الحجوزات التي تخص خدمات العامل
-      { $match: { 'serviceData.User': new mongoose.Types.ObjectId(workerId) } },
+      // فلترة الحجوزات الخاصة بالعامل والتي تحتوي على bookingDate صالح
+      {
+        $match: {
+          'serviceData.User': new mongoose.Types.ObjectId(workerId),
+          bookingDate: { $ne: null },
+        },
+      },
 
-      // تجميع حسب شهر تاريخ الحجز (bookingDate)
       {
         $group: {
           _id: { $month: '$bookingDate' },
@@ -588,12 +549,16 @@ export const getWorkerBookingCountsByMonth = async (req, res) => {
         },
       },
 
-      // ترتيب حسب الشهر تصاعدياً
       { $sort: { _id: 1 } },
     ]);
 
     res.status(200).json(bookings);
   } catch (error) {
-    res.status(500).json({ message: 'خطأ أثناء حساب الإحصائيات الشهرية', error: error.message });
+    res.status(500).json({
+      message: 'خطأ أثناء حساب الإحصائيات الشهرية',
+      error: error.message,
+    });
   }
 };
+
+

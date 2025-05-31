@@ -18,14 +18,12 @@ export const protect = asyncHandler(async (req, res, next) => {
 
       req.user = await User.findById(decoded.id).select('-password');
 
-      next();
+      return next();
     } catch (error) {
       res.status(401);
       throw new Error('توكن غير صالح أو منتهي');
     }
-  }
-
-  if (!token) {
+  } else {
     res.status(401);
     throw new Error('لا يوجد توكن، غير مصرح');
   }
@@ -81,14 +79,14 @@ export const canModifyBooking = async (req, res, next) => {
       return res.status(404).json({ message: 'الحجز غير موجود' });
     }
 
-    // السماح بالتعديل إذا كان المستخدم أدمن أو صاحب الحجز
-    if (req.user.isAdmin || booking.user.toString() === req.user._id.toString()) {
-      req.booking = booking; // تمرير الحجز
+    // السماح بالتعديل إذا كان المستخدم أدمن أو هو صاحب الحجز (customer)
+    if (req.user.isAdmin || booking.customer.toString() === req.user._id.toString()) {
+      req.booking = booking; // تمرير الحجز للخطوة التالية
       next();
     } else {
       return res.status(403).json({ message: 'غير مصرح لك بتعديل هذا الحجز' });
     }
   } catch (error) {
-    return res.status(500).json({ message: 'خطأ في الخادم' });
+    return res.status(500).json({ message: 'خطأ في الخادم', error: error.message });
   }
 };
