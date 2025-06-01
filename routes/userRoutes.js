@@ -21,7 +21,7 @@ router.get('/search', searchWorkersByLocation);// it works but need modification
 router.get('/my-services', protect, getMyServiceBookings);// doneeeeeeeee
 router.get('/stats', protect, getUserStats);//perfeeeeectttttt
 router.get('/:id',protect, getUserById); //great job
-router.delete('/user/:id', protect, deleteUserByAdmin);
+router.delete('/id', protect, deleteUserByAdmin);
 router.delete('/admin/service/:id', protect, deleteServiceByAdmin);
 router.post('/forget-password', forgetPassword);
 router.post('/reset-password/:token', resetPassword);
