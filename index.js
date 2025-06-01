@@ -12,6 +12,7 @@ import userDashboardRoutes from './routes/userDashboard.js';
 import postRoutes from './routes/postRoutes.js';
 import messageRoutes from  './routes/messageRoutes.js';
 import { createAdminUser } from './createAdmin.js';
+import {adminRoutes} from './routes/adminRoutes.js';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use("/api/worker", bookingRoutes);
 app.use("/api/worker-dashboard", userDashboardRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/admin", adminRoutes);
 
 // تحميل المتغيرات البيئية
 dotenv.config();
