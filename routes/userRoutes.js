@@ -4,6 +4,8 @@ import { protect } from '../middleware/authMiddleware.js';
 import { updateUser } from '../controllers/useController.js';
 import { deleteUser } from '../controllers/useController.js';
 import {resetPassword,forgetPassword } from '../controllers/forgetPasswordController.js';
+import { deleteUserByAdmin,  deleteServiceByAdmin  } from '../controllers/adminController.js';
+import { protect ,adminOnly} from '../middleware/authMiddleware.js';
 
 
 
@@ -19,7 +21,8 @@ router.get('/search', searchWorkersByLocation);// it works but need modification
 router.get('/my-services', protect, getMyServiceBookings);// doneeeeeeeee
 router.get('/stats', protect, getUserStats);//perfeeeeectttttt
 router.get('/:id',protect, getUserById); //great job
-
+router.delete('/user/:id', protect, adminOnly, deleteUserByAdmin);
+router.delete('/admin/service/:id', protect, adminOnly, deleteServiceByAdmin);
 router.post('/forget-password', forgetPassword);
 router.post('/reset-password/:token', resetPassword);
 
